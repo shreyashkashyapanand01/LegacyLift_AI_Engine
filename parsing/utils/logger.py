@@ -49,5 +49,8 @@ def setup_logging():
     logger.addHandler(console_handler)
 
     logger.info("Logging system initialized")
+    
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     return logger

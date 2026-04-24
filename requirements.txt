@@ -3,3 +3,6 @@ fastapi
 uvicorn 
 javalang
 python-multipart
+sentence-transformers
+python-dotenv
+faiss-cpu
