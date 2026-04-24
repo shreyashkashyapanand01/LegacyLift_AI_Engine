@@ -2,3 +2,4 @@ ipykernel
 fastapi
 uvicorn 
 javalang
+python-multipart
