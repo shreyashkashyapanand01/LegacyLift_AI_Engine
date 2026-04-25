@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import List, Dict
+from typing import Dict
 
 from parsing.core.scanner import scan_project
 from parsing.core.orchestrator import run_pipeline
@@ -31,7 +31,6 @@ class RAGPipeline:
     # ---------------------------
     def build_index(self, root_path: str):
         """
-        Full pipeline:
         code → parse → chunk → embed → FAISS → save
         """
 
@@ -42,13 +41,13 @@ class RAGPipeline:
             files = scan_project(root_path)
             parsed_output = run_pipeline(root_path, files)
 
-            # Module 2 preprocessing
+            # Module 2
             docs = build_documents(parsed_output, root_path)
             chunks = chunk_documents(docs, root_path)
 
             texts = [c["text"] for c in chunks]
 
-            # Embedding
+            # Embeddings
             vectors = self.embedder.embed_documents(texts)
 
             # FAISS
@@ -56,8 +55,8 @@ class RAGPipeline:
             self.store = FaissStore(dim)
             self.store.add(vectors, chunks)
 
-            # Save index
-            self.index_manager.save(self.store.index, self.store.metadata)
+            # ✅ FIX: save FULL chunk data (not metadata)
+            self.index_manager.save(self.store.index, self.store.data)
 
             logger.info("Index built and saved successfully")
 
@@ -70,17 +69,19 @@ class RAGPipeline:
     # ---------------------------
     def load_index(self):
         """
-        Load FAISS index from disk
+        Load FAISS index
         """
 
         try:
             logger.info("Loading RAG index")
 
-            index, metadata = self.index_manager.load()
+            index, data = self.index_manager.load()
 
             self.store = FaissStore(index.d)
             self.store.index = index
-            self.store.metadata = metadata
+
+            # ✅ FIX: assign to data (not metadata)
+            self.store.data = data
 
             self.retriever = Retriever(self.store, self.embedder)
 
@@ -91,11 +92,11 @@ class RAGPipeline:
             raise RuntimeError("RAG load failed")
 
     # ---------------------------
-    # RETRIEVAL PHASE
+    # QUERY PHASE
     # ---------------------------
     def query(self, query: str, top_k: int = 3) -> Dict:
         """
-        Query the system
+        Query pipeline
         """
 
         try:

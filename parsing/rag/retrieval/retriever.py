@@ -1,61 +1,133 @@
 import logging
 from typing import List, Dict
-
-from parsing.rag.embedding.embedder import Embedder
-from parsing.rag.vector_store.faiss_store import FaissStore
+import re
 
 logger = logging.getLogger(__name__)
 
 
 class Retriever:
-    def __init__(self, store: FaissStore, embedder: Embedder):
+    def __init__(self, store, embedder):
         self.store = store
         self.embedder = embedder
 
-    def retrieve(self, query: str, top_k: int = 3) -> List[Dict]:
-        """
-        Main retrieval function
-        """
+    # ---------------------------
+    # 🔍 QUERY ANALYSIS
+    # ---------------------------
+    def _detect_language(self, query: str):
+        query = query.lower()
 
+        if "python" in query:
+            return "python"
+        elif "java" in query:
+            return "java"
+
+        return None
+
+    def _extract_keywords(self, text: str):
+        return set(re.findall(r"\b\w+\b", text.lower()))
+
+    # ---------------------------
+    # ⚖️ HYBRID SCORING
+    # ---------------------------
+    def _score(self, query, chunk, base_score):
+        text = chunk["text"]
+        metadata = chunk["metadata"]
+
+        query_words = self._extract_keywords(query)
+        text_words = self._extract_keywords(text)
+
+        # keyword overlap
+        overlap = len(query_words & text_words)
+        keyword_score = overlap / (len(query_words) + 1)
+
+        # function name boost
+        func_name = metadata.get("function", "").lower()
+        func_score = 1.0 if func_name and func_name in query.lower() else 0.0
+
+        # final score
+        final_score = (
+            0.7 * base_score +
+            0.2 * keyword_score +
+            0.1 * func_score
+        )
+
+        return final_score
+
+    # ---------------------------
+    # 🚀 RETRIEVE
+    # ---------------------------
+    def retrieve(self, query: str, top_k: int = 3) -> List[Dict]:
         try:
             logger.info(f"Retrieving for query: {query}")
 
-            # 🔥 Step 1: embed query
+            language_filter = self._detect_language(query)
+
             query_vector = self.embedder.embed_query(query)
 
-            # 🔥 Step 2: search FAISS
-            results = self.store.search(query_vector, top_k)
+            raw_results = self.store.search(query_vector, top_k * 3)
 
-            # 🔥 Step 3: format results
-            formatted_results = []
+            scored_results = []
 
-            for r in results:
-                metadata = r["metadata"]
+            # 🔥 FIXED LOOP (IMPORTANT)
+            for r in raw_results:
+                base_score = r["score"]
+                chunk = {
+                    "text": r["text"],
+                    "metadata": r["metadata"]
+                }
 
-                formatted_results.append({
-                    "score": r["score"],
-                    "code": metadata["text"],
-                    "file": metadata["metadata"]["file"],
-                    "function": metadata["metadata"]["function"],
-                    "language": metadata["metadata"]["language"]
+                metadata = chunk["metadata"]
+
+                # language filter
+                if language_filter:
+                    if metadata.get("language") != language_filter:
+                        continue
+
+                final_score = self._score(query, chunk, base_score)
+
+                scored_results.append((final_score, chunk))
+
+            # sort
+            scored_results.sort(key=lambda x: x[0], reverse=True)
+
+            # deduplicate
+            seen = set()
+            final_results = []
+
+            for score, chunk in scored_results:
+                cid = chunk["metadata"]["id"]
+
+                if cid in seen:
+                    continue
+
+                seen.add(cid)
+
+                final_results.append({
+                    "score": score,
+                    "code": chunk["text"],  # 🔥 IMPORTANT CHANGE
+                    "file": chunk["metadata"]["file"],
+                    "function": chunk["metadata"].get("function"),
+                    "language": chunk["metadata"].get("language")
                 })
 
-            logger.info(f"Retrieved {len(formatted_results)} results")
+                if len(final_results) >= top_k:
+                    break
 
-            return formatted_results
+            logger.info(f"Retrieved {len(final_results)} results")
+
+            return final_results
 
         except Exception:
             logger.exception("Retrieval failed")
             raise RuntimeError("Retriever failed")
 
+    # ---------------------------
+    # 🧠 CONTEXT BUILDER
+    # ---------------------------
     def build_context(self, results: List[Dict]) -> str:
-        """
-        Combine retrieved chunks into a single context string
-        """
-
         try:
-            context = "\n\n".join([r["code"] for r in results])
-            return context
+            # 🔥 USE "code" NOT "text"
+            return "\n\n".join([r["code"] for r in results])
 
         except Exception:
             logger.exception("Context building failed")

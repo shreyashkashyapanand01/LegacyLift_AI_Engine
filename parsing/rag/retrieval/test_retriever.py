@@ -48,10 +48,14 @@ try:
     context = retriever.build_context(results)
 
     print("\n=== RETRIEVED RESULTS ===\n")
+
     for r in results:
         print(r["score"])
+
+        # ✅ NEW FORMAT (FLAT STRUCTURE)
         print(r["function"], "->", r["file"])
         print(r["code"])
+
         print("-" * 50)
 
     print("\n=== FINAL CONTEXT ===\n")
