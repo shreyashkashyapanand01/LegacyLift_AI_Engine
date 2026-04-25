@@ -20,16 +20,24 @@ try:
     # Step 2: RAG pipeline
     pipeline = RAGPipeline(index_dir=f"workspace/{job_id}/index")
 
-    # 🔥 Build index (one-time)
+    # 🔥 Build index
     pipeline.build_index(root_path)
 
-    # 🔥 Load index (simulate runtime)
+    # 🔥 Load index
     pipeline.load_index()
 
     # 🔍 Query
     response = pipeline.query("function to add numbers", top_k=2)
 
-    print("\n=== FINAL RESPONSE ===\n")
+    print("\n=== RETRIEVED RESULTS ===\n")
+
+    for r in response["results"]:
+        print(r["score"])
+        print(r["function"], "->", r["file"])
+        print(r["code"])
+        print("-" * 50)
+
+    print("\n=== FINAL CONTEXT ===\n")
     print(response["context"])
 
 except Exception:
