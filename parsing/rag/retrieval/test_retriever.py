@@ -26,6 +26,16 @@ try:
 
     files = scan_project(root_path)
     parsed_output = run_pipeline(root_path, files)
+    
+     #🔥 ADD THIS BLOCK
+    import json
+
+    print("\n=== PARSED OUTPUT SAMPLE ===\n")
+
+    print(json.dumps({
+        "functions": parsed_output.get("functions", [])[:1],
+        "dependencies": parsed_output.get("dependencies", [])[:1]
+    }, indent=2))
 
     # 🔹 Module 2
     docs = build_documents(parsed_output, root_path)

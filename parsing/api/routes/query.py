@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from parsing.api.services.rag_service import RagService
+from parsing.rag.models.rag_schema import RAGResponse
 
 router = APIRouter()
 service = RagService()
@@ -13,7 +14,7 @@ class QueryRequest(BaseModel):
     top_k: int = 3
 
 
-@router.post("/query")
+@router.post("/query", response_model=RAGResponse)
 def query_code(req: QueryRequest):
     return service.query(
         job_id=req.job_id,
