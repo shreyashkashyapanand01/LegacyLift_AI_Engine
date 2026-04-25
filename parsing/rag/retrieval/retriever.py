@@ -27,7 +27,7 @@ class Retriever:
         return set(re.findall(r"\b\w+\b", text.lower()))
 
     # ---------------------------
-    # ⚖️ HYBRID SCORING
+    # ⚖️ HYBRID SCORING (IMPROVED)
     # ---------------------------
     def _score(self, query, chunk, base_score):
         text = chunk["text"]
@@ -36,19 +36,19 @@ class Retriever:
         query_words = self._extract_keywords(query)
         text_words = self._extract_keywords(text)
 
-        # keyword overlap
+        # 🔹 keyword overlap
         overlap = len(query_words & text_words)
         keyword_score = overlap / (len(query_words) + 1)
 
-        # function name boost
+        # 🔹 function match boost (stronger now)
         func_name = metadata.get("function", "").lower()
         func_score = 1.0 if func_name and func_name in query.lower() else 0.0
 
-        # final score
+        # 🔥 improved weighting
         final_score = (
-            0.7 * base_score +
-            0.2 * keyword_score +
-            0.1 * func_score
+            0.6 * base_score +
+            0.25 * keyword_score +
+            0.15 * func_score
         )
 
         return final_score
@@ -68,7 +68,6 @@ class Retriever:
 
             scored_results = []
 
-            # 🔥 FIXED LOOP (IMPORTANT)
             for r in raw_results:
                 base_score = r["score"]
                 chunk = {
@@ -78,7 +77,7 @@ class Retriever:
 
                 metadata = chunk["metadata"]
 
-                # language filter
+                # 🔹 language filter
                 if language_filter:
                     if metadata.get("language") != language_filter:
                         continue
@@ -87,10 +86,10 @@ class Retriever:
 
                 scored_results.append((final_score, chunk))
 
-            # sort
+            # 🔹 sort
             scored_results.sort(key=lambda x: x[0], reverse=True)
 
-            # deduplicate
+            # 🔹 deduplicate
             seen = set()
             final_results = []
 
@@ -104,7 +103,7 @@ class Retriever:
 
                 final_results.append({
                     "score": score,
-                    "code": chunk["text"],  # 🔥 IMPORTANT CHANGE
+                    "code": chunk["text"],
                     "file": chunk["metadata"]["file"],
                     "function": chunk["metadata"].get("function"),
                     "language": chunk["metadata"].get("language")
@@ -122,12 +121,24 @@ class Retriever:
             raise RuntimeError("Retriever failed")
 
     # ---------------------------
-    # 🧠 CONTEXT BUILDER
+    # 🧠 CONTEXT BUILDER (UPGRADED 🔥)
     # ---------------------------
     def build_context(self, results: List[Dict]) -> str:
         try:
-            # 🔥 USE "code" NOT "text"
-            return "\n\n".join([r["code"] for r in results])
+            blocks = []
+
+            for r in results:
+                block = f"""
+File: {r["file"]}
+Function: {r["function"]}
+Language: {r["language"]}
+
+Code:
+{r["code"]}
+"""
+                blocks.append(block.strip())
+
+            return "\n\n".join(blocks)
 
         except Exception:
             logger.exception("Context building failed")

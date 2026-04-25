@@ -13,6 +13,11 @@ from parsing.rag.vector_store.faiss_store import FaissStore
 from parsing.rag.vector_store.index_manager import IndexManager
 from parsing.rag.retrieval.retriever import Retriever
 
+# 🔥 LLM
+from parsing.rag.llm.llm_service import LLMService
+from parsing.rag.llm.prompt_builder import build_code_prompt
+from parsing.rag.llm.response_parser import clean_response
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +25,7 @@ class RagService:
 
     def __init__(self):
         self.embedder = Embedder()
+        self.llm = LLMService()
 
     # ----------------------------------
     # 🔥 INDEX PROJECT
@@ -43,12 +49,11 @@ class RagService:
             store = FaissStore(vectors.shape[1])
             store.add(vectors, chunks)
 
-            # ✅ FIX: correct path + correct metadata
             index_path = os.path.join("workspace", job_id)
             os.makedirs(index_path, exist_ok=True)
 
             manager = IndexManager(index_path)
-            manager.save(store.index, store.data)   # 🔥 FIXED
+            manager.save(store.index, store.data)
 
             logger.info(f"Indexing completed for job_id={job_id}")
 
@@ -59,11 +64,10 @@ class RagService:
             raise RuntimeError("Indexing failed")
 
     # ----------------------------------
-    # 🔍 QUERY
+    # 🔍 QUERY (STRUCTURED FINAL 🔥)
     # ----------------------------------
     def query(self, job_id: str, query: str, top_k: int = 3):
         try:
-            # ✅ THIS is where path should be used
             index_path = os.path.join("workspace", job_id)
 
             manager = IndexManager(index_path)
@@ -71,16 +75,54 @@ class RagService:
 
             store = FaissStore(index.d)
             store.index = index
-            store.data = data   # 🔥 FIXED
+            store.data = data
 
             retriever = Retriever(store, self.embedder)
 
+            # 🔹 Retrieve
             results = retriever.retrieve(query, top_k=top_k)
+
+            if not results:
+                return {
+                    "results": [],
+                    "context": "",
+                    "answer": {
+                        "explanation": "No relevant code found.",
+                        "code_reference": "",
+                        "examples": []
+                    }
+                }
+
             context = retriever.build_context(results)
+
+            # 🔥 Build prompt
+            prompt = build_code_prompt(query, context)
+
+            logger.debug(f"Prompt:\n{prompt}")
+
+            # 🔥 LLM call
+            try:
+                llm_raw_response = self.llm.generate(prompt)
+
+                parsed_answer = clean_response(llm_raw_response)
+
+                # ✅ ensure structure always correct
+                if not isinstance(parsed_answer, dict):
+                    raise ValueError("Invalid LLM response format")
+
+            except Exception:
+                logger.exception("LLM failed")
+
+                parsed_answer = {
+                    "explanation": "Retrieved relevant code, but failed to generate explanation.",
+                    "code_reference": "",
+                    "examples": []
+                }
 
             return {
                 "results": results,
-                "context": context
+                "context": context,
+                "answer": parsed_answer
             }
 
         except Exception:

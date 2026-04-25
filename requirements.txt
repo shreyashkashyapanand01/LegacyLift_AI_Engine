@@ -6,3 +6,6 @@ python-multipart
 sentence-transformers
 python-dotenv
 faiss-cpu
+openai 
+groq 
+google-generativeai
