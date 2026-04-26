@@ -13,10 +13,8 @@ from parsing.rag.vector_store.faiss_store import FaissStore
 from parsing.rag.vector_store.index_manager import IndexManager
 from parsing.rag.retrieval.retriever import Retriever
 
-# 🔥 LLM
-from parsing.rag.llm.llm_service import LLMService
-from parsing.rag.llm.prompt_builder import build_code_prompt
-from parsing.rag.llm.response_parser import clean_response
+# 🔥 NEW CLEAN LAYER
+from parsing.rag.agents.agent_service import AgentService
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +23,7 @@ class RagService:
 
     def __init__(self):
         self.embedder = Embedder()
-        self.llm = LLMService()
+        self.agent_service = AgentService()   # ✅ USE THIS ONLY
 
     # ----------------------------------
     # 🔥 INDEX PROJECT
@@ -64,10 +62,11 @@ class RagService:
             raise RuntimeError("Indexing failed")
 
     # ----------------------------------
-    # 🔍 QUERY (STRUCTURED FINAL 🔥)
+    # 🔍 QUERY (🔥 FINAL CLEAN VERSION)
     # ----------------------------------
     def query(self, job_id: str, query: str, top_k: int = 3):
         try:
+            # 🔹 Load index
             index_path = os.path.join("workspace", job_id)
 
             manager = IndexManager(index_path)
@@ -86,43 +85,35 @@ class RagService:
                 return {
                     "results": [],
                     "context": "",
-                    "answer": {
-                        "explanation": "No relevant code found.",
-                        "code_reference": "",
-                        "examples": []
-                    }
+                    "analysis": None,
+                    "refactor": None,
+                    "tests": None,
+                    "validation": None
                 }
 
             context = retriever.build_context(results)
 
-            # 🔥 Build prompt
-            prompt = build_code_prompt(query, context)
+            # 🔥 USE AGENT SERVICE (CLEAN ARCHITECTURE)
+            final_state = self.agent_service.run(query, context)
 
-            logger.debug(f"Prompt:\n{prompt}")
+            # 🔥 Safety: handle dict (LangGraph edge case)
+            if isinstance(final_state, dict):
+                from parsing.rag.agents.schemas.agent_schema import AgentState
+                final_state = AgentState(**final_state)
 
-            # 🔥 LLM call
-            try:
-                llm_raw_response = self.llm.generate(prompt)
-
-                parsed_answer = clean_response(llm_raw_response)
-
-                # ✅ ensure structure always correct
-                if not isinstance(parsed_answer, dict):
-                    raise ValueError("Invalid LLM response format")
-
-            except Exception:
-                logger.exception("LLM failed")
-
-                parsed_answer = {
-                    "explanation": "Retrieved relevant code, but failed to generate explanation.",
-                    "code_reference": "",
-                    "examples": []
-                }
+            # 🔥 Safe extraction
+            analysis = final_state.analysis.model_dump() if final_state.analysis else None
+            refactor = final_state.refactor.model_dump() if final_state.refactor else None
+            tests = final_state.tests.model_dump() if final_state.tests else None
+            validation = final_state.validation.model_dump() if final_state.validation else None
 
             return {
                 "results": results,
                 "context": context,
-                "answer": parsed_answer
+                "analysis": analysis,
+                "refactor": refactor,
+                "tests": tests,
+                "validation": validation
             }
 
         except Exception:

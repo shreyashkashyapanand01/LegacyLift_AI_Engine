@@ -126,7 +126,7 @@ def normalize_output(result: Dict) -> Dict:
 # ---------------------------
 def run_pipeline(root_path: str, files: List[Dict]) -> Dict:
     """
-    Scan → Parse → Dependencies → Normalize → Validate
+    Scan -> Parse -> Dependencies -> Normalize -> Validate
     """
 
     logger.info("Starting orchestration pipeline")

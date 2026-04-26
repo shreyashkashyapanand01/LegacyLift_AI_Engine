@@ -9,3 +9,5 @@ faiss-cpu
 openai 
 groq 
 google-generativeai
+langgraph 
+langchain

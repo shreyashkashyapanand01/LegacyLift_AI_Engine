@@ -31,7 +31,7 @@ class RAGPipeline:
     # ---------------------------
     def build_index(self, root_path: str):
         """
-        code → parse → chunk → embed → FAISS → save
+        code -> parse -> chunk -> embed -> FAISS -> save
         """
 
         try:
