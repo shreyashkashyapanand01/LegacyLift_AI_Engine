@@ -68,6 +68,28 @@ class RefactorEngineResponse(BaseModel):
     diff: DiffResponse
     explanations: List[ExplanationItem]
     validation: Dict   # you already return {is_valid, errors}
+    
+# ---------------------------
+# 🔥 MODULE 5 (EXECUTION ENGINE)
+# ---------------------------
+class ExecutionResultItem(BaseModel):
+    status: str
+    output: Optional[str] = None
+    error: Optional[str] = None
+    exception: Optional[str] = None
+    expected: Optional[str] = None
+    actual: Optional[str] = None
+
+
+class ExecutionValidationResponse(BaseModel):
+    status: str
+    confidence: float
+    summary: str
+    failed_cases: List[Dict]
+
+    # optional debug info (VERY useful)
+    original_results: Optional[List[ExecutionResultItem]] = None
+    refactored_results: Optional[List[ExecutionResultItem]] = None
 
 
 # ---------------------------
@@ -82,6 +104,7 @@ class RAGResponse(BaseModel):
 
     # 🔥 NEW FIELD
     refactor_engine: Optional[RefactorEngineResponse] = None
+    execution_validation: Optional[ExecutionValidationResponse] = None
 
     tests: Optional[TestResponse] = None
     validation: Optional[ValidationResponse] = None
