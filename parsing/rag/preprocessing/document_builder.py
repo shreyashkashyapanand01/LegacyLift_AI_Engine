@@ -97,7 +97,7 @@ logger = logging.getLogger(__name__)
 
 def build_documents(parsed_output: Dict, root_path: str) -> List[Dict]:
     """
-    Converts parsed JSON → documents for RAG
+    Converts parsed JSON -> documents for RAG
     """
 
     documents = []

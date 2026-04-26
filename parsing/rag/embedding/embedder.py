@@ -34,7 +34,7 @@ class Embedder:
 
     def embed_documents(self, texts: List[str]) -> np.ndarray:
         """
-        Converts list of texts → embeddings
+        Converts list of texts -> embeddings
         """
 
         try:
