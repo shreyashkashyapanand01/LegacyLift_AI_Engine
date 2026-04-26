@@ -13,8 +13,8 @@ from parsing.rag.vector_store.faiss_store import FaissStore
 from parsing.rag.vector_store.index_manager import IndexManager
 from parsing.rag.retrieval.retriever import Retriever
 
-# 🔥 NEW CLEAN LAYER
 from parsing.rag.agents.agent_service import AgentService
+from parsing.rag.refactor_engine.pipeline.refactor_pipeline import RefactorPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class RagService:
 
     def __init__(self):
         self.embedder = Embedder()
-        self.agent_service = AgentService()   # ✅ USE THIS ONLY
+        self.agent_service = AgentService()
 
     # ----------------------------------
     # 🔥 INDEX PROJECT
@@ -62,7 +62,7 @@ class RagService:
             raise RuntimeError("Indexing failed")
 
     # ----------------------------------
-    # 🔍 QUERY (🔥 FINAL CLEAN VERSION)
+    # 🔍 QUERY (FINAL)
     # ----------------------------------
     def query(self, job_id: str, query: str, top_k: int = 3):
         try:
@@ -87,31 +87,61 @@ class RagService:
                     "context": "",
                     "analysis": None,
                     "refactor": None,
+                    "refactor_engine": None,
                     "tests": None,
                     "validation": None
                 }
 
-            context = retriever.build_context(results)
+            # ✅ ALWAYS USE TOP RESULT
+            top_result = results[0]
+            context = retriever.build_context([top_result])
 
-            # 🔥 USE AGENT SERVICE (CLEAN ARCHITECTURE)
+            # 🔥 AGENT PIPELINE
             final_state = self.agent_service.run(query, context)
 
-            # 🔥 Safety: handle dict (LangGraph edge case)
+            # 🔥 Safety: dict → AgentState
             if isinstance(final_state, dict):
                 from parsing.rag.agents.schemas.agent_schema import AgentState
                 final_state = AgentState(**final_state)
 
-            # 🔥 Safe extraction
+            # 🔥 Extract outputs
             analysis = final_state.analysis.model_dump() if final_state.analysis else None
-            refactor = final_state.refactor.model_dump() if final_state.refactor else None
+            refactor_raw = final_state.refactor.model_dump() if final_state.refactor else None
             tests = final_state.tests.model_dump() if final_state.tests else None
             validation = final_state.validation.model_dump() if final_state.validation else None
 
+            # ==================================
+            # 🔥 MODULE 4 (SAFE INTEGRATION)
+            # ==================================
+            refactor_engine_output = None
+
+            try:
+                if refactor_raw:
+                    original_code = top_result["code"]
+                    refactored_code = refactor_raw.get("code", "")
+
+                    # 🔒 skip invalid / empty / multi-file outputs
+                    if refactored_code.strip() and "File:" not in refactored_code:
+                        refactor_engine_output = RefactorPipeline.run(
+                            original_code=original_code,
+                            refactored_code=refactored_code
+                        )
+                    else:
+                        logger.warning("Skipping refactor engine (invalid or multi-file output)")
+
+            except Exception:
+                logger.exception("Refactor engine failed")
+                refactor_engine_output = None
+
+            # ==================================
+            # 🔥 FINAL RESPONSE
+            # ==================================
             return {
                 "results": results,
                 "context": context,
                 "analysis": analysis,
-                "refactor": refactor,
+                "refactor": refactor_raw,
+                "refactor_engine": refactor_engine_output,
                 "tests": tests,
                 "validation": validation
             }
