@@ -16,6 +16,9 @@ from parsing.rag.retrieval.retriever import Retriever
 from parsing.rag.agents.agent_service import AgentService
 from parsing.rag.refactor_engine.pipeline.refactor_pipeline import RefactorPipeline
 
+# 🔥 MODULE 5
+from parsing.execution_engine.validator.validation_engine import ValidationEngine
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,6 +27,7 @@ class RagService:
     def __init__(self):
         self.embedder = Embedder()
         self.agent_service = AgentService()
+        self.validation_engine = ValidationEngine()   # 🔥 NEW
 
     # ----------------------------------
     # 🔥 INDEX PROJECT
@@ -62,7 +66,7 @@ class RagService:
             raise RuntimeError("Indexing failed")
 
     # ----------------------------------
-    # 🔍 QUERY (FINAL)
+    # 🔍 QUERY (🔥 FINAL SYSTEM)
     # ----------------------------------
     def query(self, job_id: str, query: str, top_k: int = 3):
         try:
@@ -88,6 +92,7 @@ class RagService:
                     "analysis": None,
                     "refactor": None,
                     "refactor_engine": None,
+                    "execution_validation": None,
                     "tests": None,
                     "validation": None
                 }
@@ -111,7 +116,7 @@ class RagService:
             validation = final_state.validation.model_dump() if final_state.validation else None
 
             # ==================================
-            # 🔥 MODULE 4 (SAFE INTEGRATION)
+            # 🔥 MODULE 4 (Refactor Engine)
             # ==================================
             refactor_engine_output = None
 
@@ -120,7 +125,7 @@ class RagService:
                     original_code = top_result["code"]
                     refactored_code = refactor_raw.get("code", "")
 
-                    # 🔒 skip invalid / empty / multi-file outputs
+                    # 🔒 skip invalid / multi-file outputs
                     if refactored_code.strip() and "File:" not in refactored_code:
                         refactor_engine_output = RefactorPipeline.run(
                             original_code=original_code,
@@ -134,6 +139,31 @@ class RagService:
                 refactor_engine_output = None
 
             # ==================================
+            # 🔥 MODULE 5 (Execution Engine)
+            # ==================================
+            execution_validation = None
+
+            try:
+                if (
+                    refactor_engine_output and
+                    tests and
+                    refactor_engine_output.get("refactored_code") and
+                    refactor_engine_output.get("language") in ["python", "java"]
+                ):
+                    execution_validation = self.validation_engine.validate(
+                        original_code=refactor_engine_output["original_code"],
+                        refactored_code=refactor_engine_output["refactored_code"],
+                        tests=tests,
+                        language=refactor_engine_output["language"]
+                    )
+                else:
+                    logger.warning("Skipping execution validation (missing data or unsupported language)")
+
+            except Exception:
+                logger.exception("Execution validation failed")
+                execution_validation = None
+
+            # ==================================
             # 🔥 FINAL RESPONSE
             # ==================================
             return {
@@ -142,6 +172,7 @@ class RagService:
                 "analysis": analysis,
                 "refactor": refactor_raw,
                 "refactor_engine": refactor_engine_output,
+                "execution_validation": execution_validation,  # 🔥 NEW
                 "tests": tests,
                 "validation": validation
             }
