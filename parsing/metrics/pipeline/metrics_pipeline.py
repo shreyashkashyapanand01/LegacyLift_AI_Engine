@@ -38,7 +38,14 @@ class MetricsPipeline:
             # ---------------------------
             # STEP 4: HUMAN ANALYSIS
             # ---------------------------
-            analysis = ImprovementAnalyzer.analyze(comparison, score)
+            #analysis = ImprovementAnalyzer.analyze(comparison, score)
+            
+            analysis = ImprovementAnalyzer.analyze(
+                comparison,
+                score,
+                before_features,
+                after_features
+            )
 
             # ---------------------------
             # FINAL OUTPUT
