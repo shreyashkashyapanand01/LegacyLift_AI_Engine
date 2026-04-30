@@ -19,6 +19,10 @@ from parsing.rag.refactor_engine.pipeline.refactor_pipeline import RefactorPipel
 # 🔥 MODULE 5
 from parsing.execution_engine.validator.validation_engine import ValidationEngine
 
+# 🔥 MODULE 6
+from parsing.metrics.pipeline.metrics_pipeline import MetricsPipeline
+from parsing.metrics.models.metrics_schema import MetricsResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,7 +31,7 @@ class RagService:
     def __init__(self):
         self.embedder = Embedder()
         self.agent_service = AgentService()
-        self.validation_engine = ValidationEngine()   # 🔥 NEW
+        self.validation_engine = ValidationEngine()
 
     # ----------------------------------
     # 🔥 INDEX PROJECT
@@ -93,6 +97,7 @@ class RagService:
                     "refactor": None,
                     "refactor_engine": None,
                     "execution_validation": None,
+                    "metrics": None,  # 🔥 NEW
                     "tests": None,
                     "validation": None
                 }
@@ -125,7 +130,6 @@ class RagService:
                     original_code = top_result["code"]
                     refactored_code = refactor_raw.get("code", "")
 
-                    # 🔒 skip invalid / multi-file outputs
                     if refactored_code.strip() and "File:" not in refactored_code:
                         refactor_engine_output = RefactorPipeline.run(
                             original_code=original_code,
@@ -157,11 +161,34 @@ class RagService:
                         language=refactor_engine_output["language"]
                     )
                 else:
-                    logger.warning("Skipping execution validation (missing data or unsupported language)")
+                    logger.warning("Skipping execution validation")
 
             except Exception:
                 logger.exception("Execution validation failed")
                 execution_validation = None
+
+            # ==================================
+            # 🔥 MODULE 6 (Metrics Pipeline)
+            # ==================================
+            metrics = None
+
+            try:
+                if (
+                    refactor_engine_output and
+                    refactor_engine_output.get("refactored_code") and
+                    refactor_engine_output.get("language") in ["python", "java"]
+                ):
+                    metrics = MetricsPipeline.run(
+                        original_code=refactor_engine_output["original_code"],
+                        refactored_code=refactor_engine_output["refactored_code"],
+                        language=refactor_engine_output["language"]
+                    )
+                else:
+                    logger.warning("Skipping metrics pipeline")
+
+            except Exception:
+                logger.exception("Metrics pipeline failed")
+                metrics = None
 
             # ==================================
             # 🔥 FINAL RESPONSE
@@ -172,10 +199,13 @@ class RagService:
                 "analysis": analysis,
                 "refactor": refactor_raw,
                 "refactor_engine": refactor_engine_output,
-                "execution_validation": execution_validation,  # 🔥 NEW
+                "execution_validation": execution_validation,
+                "metrics": metrics,  # 🔥 NEW
                 "tests": tests,
                 "validation": validation
             }
+            
+            
 
         except Exception:
             logger.exception("Query failed")

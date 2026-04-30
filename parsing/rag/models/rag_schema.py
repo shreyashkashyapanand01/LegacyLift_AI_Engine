@@ -51,7 +51,7 @@ class DiffItem(BaseModel):
 class DiffResponse(BaseModel):
     added: List[str]
     removed: List[str]
-    modified: List[Dict]   # keeping flexible (your structure)
+    modified: List[Dict]   # flexible
 
 
 class ExplanationItem(BaseModel):
@@ -67,8 +67,9 @@ class RefactorEngineResponse(BaseModel):
     refactored_code: str
     diff: DiffResponse
     explanations: List[ExplanationItem]
-    validation: Dict   # you already return {is_valid, errors}
-    
+    validation: Dict
+
+
 # ---------------------------
 # 🔥 MODULE 5 (EXECUTION ENGINE)
 # ---------------------------
@@ -87,9 +88,57 @@ class ExecutionValidationResponse(BaseModel):
     summary: str
     failed_cases: List[Dict]
 
-    # optional debug info (VERY useful)
     original_results: Optional[List[ExecutionResultItem]] = None
     refactored_results: Optional[List[ExecutionResultItem]] = None
+
+
+# ---------------------------
+# 🔥 MODULE 6 (METRICS ENGINE)
+# ---------------------------
+class HalsteadResponse(BaseModel):
+    volume: float
+    difficulty: float
+    effort: float
+
+
+class FeatureResponse(BaseModel):
+    complexity: int
+    loc: int
+    comment_lines: int
+    maintainability: float
+    halstead: HalsteadResponse
+
+
+class MetricsComparisonResponse(BaseModel):
+    complexity_reduction: float
+    complexity_reduction_pct: float
+    loc_reduction: float
+    loc_reduction_pct: float
+    maintainability_improvement: float
+    effort_reduction: float
+    effort_reduction_pct: float
+
+
+class MetricsScoreResponse(BaseModel):
+    before: float
+    after: float
+    improvement: float
+
+
+class MetricsAnalysisResponse(BaseModel):
+    summary: str
+    quality_level: str
+    key_improvements: List[str]
+    risk: str
+    confidence: float
+
+
+class MetricsResponse(BaseModel):
+    before: FeatureResponse
+    after: FeatureResponse
+    comparison: MetricsComparisonResponse
+    score: MetricsScoreResponse
+    analysis: MetricsAnalysisResponse
 
 
 # ---------------------------
@@ -102,9 +151,11 @@ class RAGResponse(BaseModel):
     analysis: Optional[AnalysisResponse] = None
     refactor: Optional[RefactorResponse] = None
 
-    # 🔥 NEW FIELD
     refactor_engine: Optional[RefactorEngineResponse] = None
     execution_validation: Optional[ExecutionValidationResponse] = None
+
+    # 🔥 NEW (MODULE 6)
+    metrics: Optional[MetricsResponse] = None
 
     tests: Optional[TestResponse] = None
     validation: Optional[ValidationResponse] = None
