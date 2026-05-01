@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from parsing.utils.logger import setup_logging
@@ -15,6 +16,15 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 app = FastAPI(
     title="LegacyLift AI Engine",
     version="2.0"
+)
+
+# 🔥 Setup CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 🔥 Register routes
